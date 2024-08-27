@@ -5,36 +5,30 @@ import sys
 from absl import app
 from absl import flags
 import numpy as np
-
 import pyspiel
 
 from open_spiel.python.bots import uniform_random, human
 
 sys.path.append('/home/lisag/research')
 
-# Now you can import GA.py
+# Import GA module
 import ga
 
 _KNOWN_PLAYERS = [
-    # A generic Monte Carlo Tree Search agent.
     "ga",
-
-    # A generic random agent.
     "random",
-
-    # You'll be asked to provide the moves.
     "human"
 ]
 
 # Define flags
-flags.DEFINE_string("game", "tic_tac_toe", "Name of the game.")
-flags.DEFINE_enum("player1", "random", _KNOWN_PLAYERS, "Who controls player 1.")
-flags.DEFINE_enum("player2", "human", _KNOWN_PLAYERS, "Who controls player 2.")
-flags.DEFINE_integer("population_size", 50, "Size of the population.")
-flags.DEFINE_float("mutation_rate", 0.01, "Mutation rate.")
-flags.DEFINE_float("crossover_rate", 0.7, "Crossover rate.")
-flags.DEFINE_integer("num_generations", 100, "Number of generations.")
-flags.DEFINE_integer("num_games", 1, "How many games to play.")
+flags.DEFINE_string("game", "go", "Name of the game.")
+flags.DEFINE_enum("player1", "ga", _KNOWN_PLAYERS, "Who controls player 1.")
+flags.DEFINE_enum("player2", "random", _KNOWN_PLAYERS, "Who controls player 2.")
+flags.DEFINE_integer("population_size", 100, "Size of the population.")
+flags.DEFINE_float("mutation_rate", 0.3, "Mutation rate.")
+flags.DEFINE_float("crossover_rate", 0.9, "Crossover rate.")
+flags.DEFINE_integer("num_generations", 200, "Number of generations.")
+flags.DEFINE_integer("num_games", 10, "How many games to play.")
 flags.DEFINE_integer("seed", None, "Seed for the random number generator.")
 flags.DEFINE_bool("random_first", False, "Whether to force a random move as the first action.")
 flags.DEFINE_bool("quiet", False, "Don't show the moves as they're played.")
@@ -86,18 +80,23 @@ def _play_game(game, bots, initial_actions):
             if action is None:
                 sys.exit("Invalid action: {}".format(action_str))
 
-        history.append(action_str)
-        for bot in bots:
-            bot.inform_action(state, state.current_player(), action)
-        state.apply_action(action)
-        _opt_print("Forced action", action_str)
-        _opt_print("Next state:\n{}".format(state))
+            history.append(action_str)
+            for bot in bots:
+                bot.inform_action(state, state.current_player(), action)
+            state.apply_action(action)
+            _opt_print("Forced action", action_str)
+            _opt_print("Next state:\n{}".format(state))
 
     while not state.is_terminal():
         current_player = state.current_player()
         bot = bots[current_player]
+        legal_actions = state.legal_actions()
         action = bot.step(state)
         action_str = state.action_to_string(current_player, action)
+        
+        if action not in legal_actions:
+            raise ValueError(f"Illegal action attempted by bot: {action}")
+
         _opt_print("Player {} sampled action: {}".format(current_player, action_str))
 
         for i, bot in enumerate(bots):
