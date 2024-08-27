@@ -211,10 +211,6 @@ class GeneticAlgorithm:
     
         # If the selected action is not legal, choose a random legal action
         return random.choice(state.legal_actions())
-        # Pick the action corresponding to the current game state
-        # action_index = len(state.history())
-        # return best_individual[action_index] if action_index < len(best_individual) else random.choice(state.legal_actions())
-    
 
     def inform_action(self, state, player_id, action):
         """Let the bot know of the other agent's actions."""
