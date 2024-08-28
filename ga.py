@@ -36,23 +36,42 @@ class GeneticAlgorithm:
         return actions
 
     def fitness(self, individual):
-        """Evaluates the fitness of an individual."""
+        """Evaluates the fitness of an individual based on Go-specific metrics."""
         state = self.game.new_initial_state()
         for action in individual:
             if state.is_terminal():
                 break
             state.apply_action(action)
-        return state.returns()
+
+        # Get the outcome of the game
+        game_result = state.returns()
+        territory_control = game_result[state.current_player()]  # Total score for the player
+
+        # Fitness is higher for wins and based on territory control
+        if game_result[state.current_player()] > 0:
+            fitness_score = territory_control  # Positive score for winning
+        else:
+            fitness_score = -1 * (abs(game_result[state.current_player()]))  # Penalize for losing
+
+        return fitness_score
+
+    def heuristic_evaluation(self, state, action):
+        """Heuristic to evaluate potential future actions."""
+        future_state = state.clone()
+        future_state.apply_action(action)
+        future_returns = future_state.returns()[state.current_player()]  # Future reward estimation
+        return future_returns
 
     def selection(self, population, fitness_scores):
-        """Selects individuals based on their fitness."""
-        selected = random.choices(population, weights=fitness_scores, k=2)
-        return selected
+        """Selects individuals based on their fitness using tournament selection."""
+        tournament_size = 5
+        selected = random.choices(population, weights=fitness_scores, k=tournament_size)
+        return max(selected, key=self.fitness), max(selected, key=self.fitness)
 
     def crossover(self, parent1, parent2):
         """Performs crossover between two parents to produce offspring."""
         if random.random() < self.crossover_rate:
-            crossover_point = random.randint(1, len(parent1) - 1)
+            crossover_point = random.randint(1, min(len(parent1), len(parent2)) - 1)
             child1 = parent1[:crossover_point] + parent2[crossover_point:]
             child2 = parent2[:crossover_point] + parent1[crossover_point:]
         else:
@@ -61,10 +80,9 @@ class GeneticAlgorithm:
 
     def mutate(self, individual):
         """Mutates an individual by randomly changing one of its actions."""
+        state = self.game.new_initial_state()
         for i in range(len(individual)):
             if random.random() < self.mutation_rate:
-                # Get a new random action from the legal actions of the current state
-                state = self.game.new_initial_state()
                 legal_actions = state.legal_actions()
                 if legal_actions:
                     individual[i] = random.choice(legal_actions)
@@ -85,10 +103,10 @@ class GeneticAlgorithm:
 
             self.population = new_population
             print(f"Generation {generation + 1}, Best Fitness: {max(fitness_scores)}")
-    
+
     def step(self, state):
-        """Selects an action based on the current state of the game."""
-        best_individual = None
+        """Selects an action based on the current state of the game using long-term planning."""
+        best_action = None
         best_fitness = -float('inf')
 
         for individual in self.population:
@@ -99,21 +117,19 @@ class GeneticAlgorithm:
                     break
                 current_state.apply_action(action)
 
-            # Evaluate fitness only up to the current state
-            fitness = current_state.returns()[state.current_player()]
-            if fitness > best_fitness:
-                best_fitness = fitness
-                best_individual = individual
+            # Evaluate potential future actions based on heuristic
+            for action in state.legal_actions():
+                future_fitness = self.heuristic_evaluation(state, action)
+                if future_fitness > best_fitness:
+                    best_fitness = future_fitness
+                    best_action = action
 
-        action_index = len(state.history())
-        if action_index < len(best_individual):
-            action = best_individual[action_index]
-            if action in state.legal_actions():
-                return action
-    
-        # If the selected action is not legal, choose a random legal action
-        return random.choice(state.legal_actions())
-    
+        if best_action:
+            return best_action
+        else:
+            # If no best action found, return a random legal action
+            return random.choice(state.legal_actions())
+
     def inform_action(self, state, player_id, action):
         """Let the bot know of the other agent's actions."""
         action_string = state.action_to_string(player_id, action)
