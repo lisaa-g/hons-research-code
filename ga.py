@@ -1,134 +1,87 @@
+import random
 import numpy as np
 import pyspiel
-import random
 
 class GeneticAlgorithm:
-    def __init__(self, game, population_size, generations, mutation_rate, crossover_rate):
+    def __init__(self, game: pyspiel.Game, population_size: int, generations: int, mutation_rate: float, crossover_rate: float, player: int):
         self.game = game
         self.population_size = population_size
         self.generations = generations
         self.mutation_rate = mutation_rate
         self.crossover_rate = crossover_rate
+        self.player = player
         self.population = self.initialize_population()
-        self.current_individual = None
 
     def initialize_population(self):
-        """Initializes the population with random strategies."""
-        population = []
-        for _ in range(self.population_size):
-            individual = self.random_strategy()
-            population.append(individual)
-        return population
+        num_actions = self.game.num_distinct_actions()
+        return [np.random.rand(num_actions) for _ in range(self.population_size)]
 
-    def random_strategy(self):
-        """Creates a random strategy for the game."""
+    def fitness(self, strategy):
         state = self.game.new_initial_state()
-        actions = []
+        return self.evaluate_strategy(state, strategy)
+
+    def evaluate_strategy(self, state: pyspiel.State, strategy):
         while not state.is_terminal():
-            legal_actions = state.legal_actions()  # Get all legal actions
-            if not legal_actions:
-                break  # Break if no legal actions are available
-
-            random_action = random.choice(legal_actions)  # Choose a random action from the legal ones
-            actions.append(random_action)
-            state.apply_action(random_action)  # Apply the selected action
-
-        return actions
-
-    def fitness(self, individual):
-        """Evaluates the fitness of an individual based on Go-specific metrics."""
-        state = self.game.new_initial_state()
-        for action in individual:
-            if state.is_terminal():
-                break
+            legal_actions = state.legal_actions()
+            action = self.select_action(strategy, legal_actions)
             state.apply_action(action)
+        
+        returns = state.returns()
+        my_return = returns[self.player] if self.player < len(returns) else 0
+        opponent_return = returns[1 - self.player] if len(returns) > 1 else 0
+        fitness_value = (my_return - opponent_return) / (self.game.max_utility() - self.game.min_utility())
+        return max(0.01, fitness_value)  # Ensure fitness is never zero
 
-        # Get the outcome of the game
-        game_result = state.returns()
-        territory_control = game_result[state.current_player()]  # Total score for the player
+    def select_action(self, strategy, legal_actions):
+        action_probabilities = [strategy[action] for action in legal_actions]
+        total_prob = sum(action_probabilities)
+        
+        if total_prob <= 0:
+            # Handle case where all probabilities are zero
+            if not legal_actions:
+                raise ValueError("No legal actions available for strategy")
+            return random.choice(legal_actions)
+        
+        # Normalize action probabilities
+        action_probabilities = [prob / total_prob for prob in action_probabilities]
+        action = random.choices(legal_actions, weights=action_probabilities, k=1)[0]
+        return action
 
-        # Fitness is higher for wins and based on territory control
-        if game_result[state.current_player()] > 0:
-            fitness_score = territory_control  # Positive score for winning
-        else:
-            fitness_score = -1 * (abs(game_result[state.current_player()]))  # Penalize for losing
-
-        return fitness_score
-
-    def heuristic_evaluation(self, state, action):
-        """Heuristic to evaluate potential future actions."""
-        future_state = state.clone()
-        future_state.apply_action(action)
-        future_returns = future_state.returns()[state.current_player()]  # Future reward estimation
-        return future_returns
-
-    def selection(self, population, fitness_scores):
-        """Selects individuals based on their fitness using tournament selection."""
-        tournament_size = 5
-        selected = random.choices(population, weights=fitness_scores, k=tournament_size)
-        return max(selected, key=self.fitness), max(selected, key=self.fitness)
+    def selection(self):
+        fitness_scores = [self.fitness(individual) for individual in self.population]
+        selected_indices = np.argsort(fitness_scores)[-self.population_size//2:]
+        return [self.population[i] for i in selected_indices]
 
     def crossover(self, parent1, parent2):
-        """Performs crossover between two parents to produce offspring."""
-        if random.random() < self.crossover_rate:
-            crossover_point = random.randint(1, min(len(parent1), len(parent2)) - 1)
-            child1 = parent1[:crossover_point] + parent2[crossover_point:]
-            child2 = parent2[:crossover_point] + parent1[crossover_point:]
-        else:
-            child1, child2 = parent1, parent2
+        crossover_point = random.randint(1, len(parent1) - 1)
+        child1 = np.concatenate([parent1[:crossover_point], parent2[crossover_point:]])
+        child2 = np.concatenate([parent2[:crossover_point], parent1[crossover_point:]])
         return child1, child2
 
     def mutate(self, individual):
-        """Mutates an individual by randomly changing one of its actions."""
-        state = self.game.new_initial_state()
         for i in range(len(individual)):
             if random.random() < self.mutation_rate:
-                legal_actions = state.legal_actions()
-                if legal_actions:
-                    individual[i] = random.choice(legal_actions)
+                individual[i] += random.gauss(0, 0.3)  # Gaussian mutation
         return individual
 
     def evolve(self):
-        """Runs the genetic algorithm to evolve the population."""
-        for generation in range(self.generations):
-            fitness_scores = [self.fitness(ind) for ind in self.population]
+        for _ in range(self.generations):
             new_population = []
-
-            for _ in range(self.population_size // 2):
-                parent1, parent2 = self.selection(self.population, fitness_scores)
+            selected = self.selection()
+            while len(new_population) < self.population_size:
+                parent1, parent2 = random.sample(selected, 2)
                 child1, child2 = self.crossover(parent1, parent2)
-                child1 = self.mutate(child1)
-                child2 = self.mutate(child2)
-                new_population.extend([child1, child2])
-
+                new_population.append(self.mutate(child1))
+                new_population.append(self.mutate(child2))
             self.population = new_population
-            print(f"Generation {generation + 1}, Best Fitness: {max(fitness_scores)}")
 
     def step(self, state):
-        """Selects an action based on the current state of the game using long-term planning."""
-        best_action = None
-        best_fitness = -float('inf')
+        self.evolve()  # Evolve the population before choosing an action
+        best_strategy = max(self.population, key=self.fitness)
+        action = self.select_action(best_strategy, state.legal_actions())
+        return action
 
-        for individual in self.population:
-            # Apply the individual's strategy up to the current state
-            current_state = self.game.new_initial_state()
-            for action in individual:
-                if current_state.is_terminal():
-                    break
-                current_state.apply_action(action)
 
-            # Evaluate potential future actions based on heuristic
-            for action in state.legal_actions():
-                future_fitness = self.heuristic_evaluation(state, action)
-                if future_fitness > best_fitness:
-                    best_fitness = future_fitness
-                    best_action = action
-
-        if best_action:
-            return best_action
-        else:
-            # If no best action found, return a random legal action
-            return random.choice(state.legal_actions())
 
     def inform_action(self, state, player_id, action):
         """Let the bot know of the other agent's actions."""
