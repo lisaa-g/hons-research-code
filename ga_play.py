@@ -26,9 +26,9 @@ flags.DEFINE_enum("player1", "ga", _KNOWN_PLAYERS, "Who controls player 1.")
 flags.DEFINE_enum("player2", "random", _KNOWN_PLAYERS, "Who controls player 2.")
 flags.DEFINE_integer("population_size", 100, "Size of the population.")
 flags.DEFINE_float("mutation_rate", 0.3, "Mutation rate.")
-flags.DEFINE_float("crossover_rate", 0.9, "Crossover rate.")
-flags.DEFINE_integer("num_generations", 200, "Number of generations.")
-flags.DEFINE_integer("num_games", 10, "How many games to play.")
+flags.DEFINE_float("crossover_rate", 0.7, "Crossover rate.")
+flags.DEFINE_integer("num_generations", 10, "Number of generations.")
+flags.DEFINE_integer("num_games", 50, "How many games to play.")
 flags.DEFINE_integer("seed", None, "Seed for the random number generator.")
 flags.DEFINE_bool("random_first", False, "Whether to force a random move as the first action.")
 flags.DEFINE_bool("quiet", False, "Don't show the moves as they're played.")
@@ -48,7 +48,8 @@ def _init_bot(bot_type, game, player_id):
             population_size=FLAGS.population_size,
             generations=FLAGS.num_generations,
             mutation_rate=FLAGS.mutation_rate,
-            crossover_rate=FLAGS.crossover_rate
+            crossover_rate=FLAGS.crossover_rate,
+            player=player_id
         )
     elif bot_type == "random":
         return uniform_random.UniformRandomBot(player_id, rng)
@@ -116,7 +117,8 @@ def _play_game(game, bots, initial_actions):
     return returns, history
 
 def main(argv):
-    game = pyspiel.load_game(FLAGS.game)
+    parameters = {'board_size': 9}
+    game = pyspiel.load_game(FLAGS.game, parameters)
     if game.num_players() > 2:
         sys.exit("This game requires more players than the example can handle.")
     bots = [
