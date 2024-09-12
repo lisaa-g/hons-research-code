@@ -22,7 +22,7 @@ from absl import app
 from absl import flags
 import numpy as np
 
-from open_spiel.python.algorithms import mcts
+import mcts
 from open_spiel.python.algorithms.alpha_zero import evaluator as az_evaluator
 from open_spiel.python.algorithms.alpha_zero import model as az_model
 from open_spiel.python.bots import gtp
@@ -46,12 +46,14 @@ _KNOWN_PLAYERS = [
 
     # Run an alpha_zero checkpoint with MCTS. Uses the specified UCT/sims.
     # Requires the az_path flag.
-    "az"
+    "az",
+    
+    "mcts_trained"
 ]
 
 flags.DEFINE_string("game", "go", "Name of the game.")
 flags.DEFINE_enum("player1", "mcts", _KNOWN_PLAYERS, "Who controls player 1.")
-flags.DEFINE_enum("player2", "random", _KNOWN_PLAYERS, "Who controls player 2.")
+flags.DEFINE_enum("player2", "mcts_trained", _KNOWN_PLAYERS, "Who controls player 2.")
 flags.DEFINE_string("gtp_path", None, "Where to find a binary for gtp.")
 flags.DEFINE_multi_string("gtp_cmd", [], "GTP commands to run at init.")
 flags.DEFINE_string("az_path", None,
@@ -59,7 +61,7 @@ flags.DEFINE_string("az_path", None,
 flags.DEFINE_integer("uct_c", 2, "UCT's exploration constant.")
 flags.DEFINE_integer("rollout_count", 1, "How many rollouts to do.")
 flags.DEFINE_integer("max_simulations", 100, "How many simulations to run.")
-flags.DEFINE_integer("num_games", 10, "How many games to play.")
+flags.DEFINE_integer("num_games", 5, "How many games to play.")
 flags.DEFINE_integer("seed", None, "Seed for the random number generator.")
 flags.DEFINE_bool("random_first", False, "Play the first move randomly.")
 flags.DEFINE_bool("solve", True, "Whether to use MCTS-Solver.")
@@ -108,6 +110,18 @@ def _init_bot(bot_type, game, player_id):
     for cmd in FLAGS.gtp_cmd:
       bot.gtp_cmd(cmd)
     return bot
+  if bot_type == "mcts_trained":
+        sgf_file = "training_data.sgf"
+        evaluator = mcts.RandomRolloutEvaluator(FLAGS.rollout_count, rng)
+        return mcts.MCTSWithTraining(
+            game,
+            FLAGS.uct_c,
+            FLAGS.max_simulations,
+            evaluator,
+            sgf_file,
+            random_state=rng,
+            solve=FLAGS.solve,
+            verbose=FLAGS.verbose)
   raise ValueError("Invalid bot type: %s" % bot_type)
 
 
