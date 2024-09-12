@@ -18,7 +18,7 @@ import math
 import time
 
 import numpy as np
-
+from sgfmill import sgf
 import pyspiel
 
 
@@ -448,3 +448,92 @@ class MCTSBot(pyspiel.Bot):
         break
 
     return root
+
+
+class MCTSWithTraining(MCTSBot):
+    """
+    Implements a Monte-Carlo Tree Search (MCTS) algorithm with training capabilities using SGF files for Go.
+    
+    MCTSWithTrainingForGo is a subclass of MCTSBot that enhances the vanilla MCTS algorithm by leveraging historical 
+    game data stored in an SGF (Smart Game Format) file to inform its search process.
+    """
+
+    def __init__(self, game, uct_c, max_simulations, evaluator, sgf_file, random_state=None, solve=False, verbose=False):
+        super().__init__(game, uct_c, max_simulations, evaluator, random_state=random_state, solve=solve, verbose=verbose)
+        self.past_games, self.board_size = self._load_sgf(sgf_file)
+
+    def _load_sgf(self, sgf_file):
+      """
+      Parses the SGF file and loads the game data.
+      """
+      with open(sgf_file, "rb") as f:
+          sgf_data = f.read()
+
+      # Decode the bytes to a string
+      sgf_data_str = sgf_data.decode('utf-8')
+
+      # Parse the SGF data
+      sgf_game = sgf.Sgf_game.from_string(sgf_data_str)
+      move_list = []
+      board_size = sgf_game.get_size()  # Assuming all games have the same board size
+
+      # Process the main sequence of the SGF game
+      game_moves = []
+      for node in sgf_game.main_sequence_iter():
+          move = node.get_move()
+          if move:
+              game_moves.append(move)
+      
+      move_list.append(game_moves)
+      
+      return move_list, board_size  
+      
+    def _initialize_with_past_games(self, root, game):
+        """
+        Initializes the search tree with past game states.
+        """
+        move_list, board_size = self.past_games
+        # Initialize a new Go game state using OpenSpiel's Go environment
+        state = pyspiel.load_game(f"go({board_size})").new_initial_state()
+        
+        for node in move_list:
+            move = node.get_move()
+            if move:  # If it's a move (not setup or metadata)
+                color, (row, col) = move  # Color is 'b' or 'w', row and col are the move coordinates
+                go_move = pyspiel.Action(row * board_size + col)  # Convert move to OpenSpiel format
+                state.apply_action(go_move)
+
+                # Add the state to the search tree
+                node = SearchNode(None, state.current_player(), 1)
+                root.children.append(node)
+                root = node  # Move the root pointer down the tree
+
+    def search(self, state):
+        root = SearchNode(None, state.current_player(), 1)
+        self._initialize_with_past_games(root, state)
+        
+        for _ in range(self.max_simulations):
+            visit_path, working_state = self._apply_tree_policy(root, state)
+            if working_state.is_terminal():
+                returns = working_state.returns()
+                visit_path[-1].outcome = returns
+                solved = self.solve
+            else:
+                returns = self.evaluator.evaluate(working_state)
+                solved = False
+
+            while visit_path:
+                decision_node_idx = -1
+                while visit_path[decision_node_idx].player == pyspiel.PlayerId.CHANCE:
+                    decision_node_idx -= 1
+                target_return = returns[visit_path[decision_node_idx].player]
+                node = visit_path.pop()
+                node.total_reward += target_return
+                node.explore_count += 1
+
+                if solved and node.children:
+                    node.solved = True
+                    node.outcome = returns
+        
+        # Select the best move based on exploration count
+        return max(root.children, key=lambda n: n.explore_count).move
