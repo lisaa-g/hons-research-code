@@ -41,11 +41,12 @@ class DQN(rl_agent.AbstractAgent):
   """
 
   def __init__(self,
+               game,
                session,
                player_id,
                state_representation_size,
                num_actions,
-               hidden_layers_sizes=128,
+               hidden_layers_sizes=[32,32],
                replay_buffer_capacity=10000,
                batch_size=128,
                replay_buffer_class=ReplayBuffer,
@@ -66,7 +67,7 @@ class DQN(rl_agent.AbstractAgent):
     self._kwargs = locals()
 
     self._session = tf.Session()
-    
+    self.game = game
     self.player_id = player_id
     self._session = session
     self._num_actions = num_actions
@@ -241,7 +242,7 @@ class DQN(rl_agent.AbstractAgent):
         info_state=(
             prev_time_step.observations["info_state"][self.player_id][:]),
         action=prev_action,
-        reward=time_step.rewards[self.player_id],
+        reward=time_step.rewards,
         next_info_state=time_step.observations["info_state"][self.player_id][:],
         is_final_step=float(time_step.last()),
         legal_actions_mask=legal_actions_mask)
@@ -466,3 +467,13 @@ class DQN(rl_agent.AbstractAgent):
       ])
       self._session.run(copy_target_weights)
     return copied_object
+
+  def inform_action(self, state, player_id, action):
+        """Let the bot know of the other agent's actions."""
+        action_string = state.action_to_string(player_id, action)
+        print(f"Player {player_id} took action: {action_string}")
+        
+  def restart(self):
+        """Resets the board to the initial state."""
+        self.state = self.game.new_initial_state()
+        self.current_individual = None
