@@ -42,7 +42,7 @@ def eval_against_random_bots(env, trained_agents, random_agents, num_episodes):
 def main(_):
   game = "go"
   num_players = 2
-  env_configs = {"board_size": 9, "handicap": 1, "komi": 7.5 , "max_game_length": 50}
+  env_configs = {"board_size": 19, "handicap": 1, "komi": 7.5 , "max_game_length": 600}
   env = rl_environment.Environment(game, **env_configs)
   state_size = env.observation_spec()["info_state"][0]
   num_actions = env.action_spec()["num_actions"]
