@@ -43,7 +43,7 @@ def _opt_print(*args, **kwargs):
 def _init_bot(bot_type, game, player_id):
     rng = np.random.RandomState(FLAGS.seed)
     if bot_type == "ga":
-        return ga.GeneticAlgorithm(
+        ga_bot = ga.GeneticAlgorithm(
             game=game,
             population_size=FLAGS.population_size,
             generations=FLAGS.num_generations,
@@ -51,6 +51,9 @@ def _init_bot(bot_type, game, player_id):
             crossover_rate=FLAGS.crossover_rate,
             player=player_id
         )
+        # Load the trained model
+        ga_bot.load_model("go_ga_model.pkl")
+        return ga_bot
     elif bot_type == "random":
         return uniform_random.UniformRandomBot(player_id, rng)
     elif bot_type == "human":
