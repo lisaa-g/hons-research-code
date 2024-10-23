@@ -52,7 +52,7 @@ def _init_bot(bot_type, game, player_id):
             player=player_id
         )
         # Load the trained model
-        ga_bot.load_model("go_ga_model.pkl")
+        ga_bot.load_model("./trained_models_ga/19x19_ga_model.pkl")
         return ga_bot
     elif bot_type == "random":
         return uniform_random.UniformRandomBot(player_id, rng)
@@ -120,7 +120,7 @@ def _play_game(game, bots, initial_actions):
     return returns, history
 
 def main(argv):
-    parameters = {'board_size': 9}
+    parameters = {'board_size': 19}
     game = pyspiel.load_game(FLAGS.game, parameters)
     if game.num_players() > 2:
         sys.exit("This game requires more players than the example can handle.")
