@@ -67,7 +67,7 @@ flags.DEFINE_string("az_path", None,
 flags.DEFINE_integer("uct_c", 2, "UCT's exploration constant.")
 flags.DEFINE_integer("rollout_count", 1, "How many rollouts to do.")
 flags.DEFINE_integer("max_simulations", 100, "How many simulations to run.")
-flags.DEFINE_integer("num_games", 1, "How many games to play.")
+flags.DEFINE_integer("num_games", 50, "How many games to play.")
 flags.DEFINE_integer("seed", None, "Seed for the random number generator.")
 flags.DEFINE_bool("random_first", False, "Play the first move randomly.")
 flags.DEFINE_bool("solve", True, "Whether to use MCTS-Solver.")
@@ -137,7 +137,7 @@ def _init_bot(bot_type, game, env, player_id):
             state_representation_size=game.observation_tensor_size(),
             num_actions=game.num_distinct_actions()
         )
-        dqn_agent.restore("./checkpoints")  # Path to your saved DQN model
+        dqn_agent.restore("./checkpoints/9x9")  # Adjust this path as needed
         return dqn_agent
   raise ValueError("Invalid bot type: %s" % bot_type)
 
@@ -230,7 +230,8 @@ def convert_to_time_step(state, player_id):
 
 
 def main(argv):
-  game = pyspiel.load_game(FLAGS.game)
+  parameters = {'board_size': 9, "handicap": 1, "komi": 7.5 , "max_game_length": 100}
+  game = pyspiel.load_game(FLAGS.game, parameters)
   env = rl_environment.Environment(game)
   if game.num_players() > 2:
     sys.exit("This game requires more players than the example can handle.")
