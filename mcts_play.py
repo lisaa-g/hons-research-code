@@ -17,6 +17,7 @@
 import collections
 import random
 import sys
+import os
 
 from absl import app
 from absl import flags
@@ -53,7 +54,7 @@ _KNOWN_PLAYERS = [
 
 flags.DEFINE_string("game", "go", "Name of the game.")
 flags.DEFINE_enum("player1", "mcts", _KNOWN_PLAYERS, "Who controls player 1.")
-flags.DEFINE_enum("player2", "mcts_trained", _KNOWN_PLAYERS, "Who controls player 2.")
+flags.DEFINE_enum("player2", "random", _KNOWN_PLAYERS, "Who controls player 2.")
 flags.DEFINE_string("gtp_path", None, "Where to find a binary for gtp.")
 flags.DEFINE_multi_string("gtp_cmd", [], "GTP commands to run at init.")
 flags.DEFINE_string("az_path", None,
@@ -61,7 +62,7 @@ flags.DEFINE_string("az_path", None,
 flags.DEFINE_integer("uct_c", 2, "UCT's exploration constant.")
 flags.DEFINE_integer("rollout_count", 1, "How many rollouts to do.")
 flags.DEFINE_integer("max_simulations", 100, "How many simulations to run.")
-flags.DEFINE_integer("num_games", 5, "How many games to play.")
+flags.DEFINE_integer("num_games", 1, "How many games to play.")
 flags.DEFINE_integer("seed", None, "Seed for the random number generator.")
 flags.DEFINE_bool("random_first", False, "Play the first move randomly.")
 flags.DEFINE_bool("solve", True, "Whether to use MCTS-Solver.")
@@ -197,9 +198,61 @@ def _play_game(game, bots, initial_actions):
 
   return returns, history
 
+def convert_move_to_sgf(action_str, board_size):
+    action_str = action_str.strip()  # Remove leading/trailing spaces
+
+    # Split the action into player and move (e.g., 'B h5' -> 'B', 'h5')
+    parts = action_str.split()
+    if len(parts) != 2:
+        raise ValueError(f"Unexpected action format: {action_str}")
+    
+    move = parts[1]  # Extract the move part (e.g., 'h5')
+
+    # Handle the case where the move is 'PASS'
+    if move == 'PASS':
+        return ''  # SGF denotes pass as an empty string
+
+    col = move[0]  # Extract the column part (e.g., 'h')
+    row = move[1:]  # Extract the row part (e.g., '5')
+
+    # Make sure row is a valid number
+    try:
+        row = int(row)
+    except ValueError:
+        raise ValueError(f"Invalid row part in action: {action_str}")
+
+    # Generate valid column letters excluding 'i' (Go boards skip the 'i' column)
+    columns = [chr(i) for i in range(ord('a'), ord('a') + board_size + 1) if chr(i) != 'i']
+
+    if col not in columns:
+        raise ValueError(f"Invalid column: {col}. Valid columns are {columns}")
+
+    sgf_col = columns.index(col)  # Convert column to SGF format
+    sgf_row = board_size - row  # Convert row to SGF format
+
+    return f"{chr(ord('a') + sgf_col)}{chr(ord('a') + sgf_row)}"
+
+def save_sgf(history, filename="game.sgf", board_size=9, komi=6.5):
+    # SGF header
+    sgf = f"(;GM[1]FF[4]CA[UTF-8]SZ[{board_size}]KM[{komi}]\n"
+    sgf += "PW[Player 1]PB[Player 2]\n"  # Player names can be dynamic
+
+    # Convert moves to SGF format
+    for i, action_str in enumerate(history):
+        color = 'B' if i % 2 == 0 else 'W'  # Black or White move
+        sgf_move = convert_move_to_sgf(action_str, board_size)
+        sgf += f";{color}[{sgf_move}]\n"
+
+    sgf += ")"
+
+    # Write SGF file
+    with open(filename, 'w') as sgf_file:
+        sgf_file.write(sgf)
+    print(f"SGF saved to {filename}")
 
 def main(argv):
-  game = pyspiel.load_game(FLAGS.game)
+  parameters = {'board_size': 9}
+  game = pyspiel.load_game(FLAGS.game, parameters)
   if game.num_players() > 2:
     sys.exit("This game requires more players than the example can handle.")
   bots = [
@@ -213,6 +266,7 @@ def main(argv):
   try:
     for game_num in range(FLAGS.num_games):
       returns, history = _play_game(game, bots, argv[1:])
+      save_sgf(history, f"game_{game_num+1}.sgf")  # Save each game as SGF
       histories[" ".join(history)] += 1
       for i, v in enumerate(returns):
         overall_returns[i] += v
