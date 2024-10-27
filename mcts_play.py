@@ -53,8 +53,8 @@ _KNOWN_PLAYERS = [
 ]
 
 flags.DEFINE_string("game", "go", "Name of the game.")
-flags.DEFINE_enum("player1", "mcts", _KNOWN_PLAYERS, "Who controls player 1.")
-flags.DEFINE_enum("player2", "random", _KNOWN_PLAYERS, "Who controls player 2.")
+flags.DEFINE_enum("player1", "mcts_trained", _KNOWN_PLAYERS, "Who controls player 1.")
+flags.DEFINE_enum("player2", "mcts", _KNOWN_PLAYERS, "Who controls player 2.")
 flags.DEFINE_string("gtp_path", None, "Where to find a binary for gtp.")
 flags.DEFINE_multi_string("gtp_cmd", [], "GTP commands to run at init.")
 flags.DEFINE_string("az_path", None,
@@ -112,7 +112,7 @@ def _init_bot(bot_type, game, player_id):
       bot.gtp_cmd(cmd)
     return bot
   if bot_type == "mcts_trained":
-        sgf_file = "training_data.sgf"
+        sgf_file = "./training_data/advanced_training_data.sgf"
         evaluator = mcts.RandomRolloutEvaluator(FLAGS.rollout_count, rng)
         return mcts.MCTSWithTraining(
             game,
@@ -199,21 +199,21 @@ def _play_game(game, bots, initial_actions):
   return returns, history
 
 def convert_move_to_sgf(action_str, board_size):
-    action_str = action_str.strip()  # Remove leading/trailing spaces
+    action_str = action_str.strip() 
 
     # Split the action into player and move (e.g., 'B h5' -> 'B', 'h5')
     parts = action_str.split()
     if len(parts) != 2:
         raise ValueError(f"Unexpected action format: {action_str}")
     
-    move = parts[1]  # Extract the move part (e.g., 'h5')
+    move = parts[1]
 
     # Handle the case where the move is 'PASS'
     if move == 'PASS':
-        return ''  # SGF denotes pass as an empty string
+        return '' 
 
-    col = move[0]  # Extract the column part (e.g., 'h')
-    row = move[1:]  # Extract the row part (e.g., '5')
+    col = move[0]
+    row = move[1:] 
 
     # Make sure row is a valid number
     try:
@@ -232,10 +232,10 @@ def convert_move_to_sgf(action_str, board_size):
 
     return f"{chr(ord('a') + sgf_col)}{chr(ord('a') + sgf_row)}"
 
-def save_sgf(history, filename="game.sgf", board_size=9, komi=6.5):
-    # SGF header
+def save_sgf(history, filename="game.sgf", board_size=19, komi=6.5, player1_name="Player 1", player2_name="Player 2"):
+    # SGF header with dynamic player names
     sgf = f"(;GM[1]FF[4]CA[UTF-8]SZ[{board_size}]KM[{komi}]\n"
-    sgf += "PW[Player 1]PB[Player 2]\n"  # Player names can be dynamic
+    sgf += f"PW[{player1_name}]PB[{player2_name}]\n"
 
     # Convert moves to SGF format
     for i, action_str in enumerate(history):
@@ -249,37 +249,46 @@ def save_sgf(history, filename="game.sgf", board_size=9, komi=6.5):
     with open(filename, 'w') as sgf_file:
         sgf_file.write(sgf)
     print(f"SGF saved to {filename}")
-
+    
 def main(argv):
-  parameters = {'board_size': 9}
-  game = pyspiel.load_game(FLAGS.game, parameters)
-  if game.num_players() > 2:
-    sys.exit("This game requires more players than the example can handle.")
-  bots = [
-      _init_bot(FLAGS.player1, game, 0),
-      _init_bot(FLAGS.player2, game, 1),
-  ]
-  histories = collections.defaultdict(int)
-  overall_returns = [0, 0]
-  overall_wins = [0, 0]
-  game_num = 0
-  try:
-    for game_num in range(FLAGS.num_games):
-      returns, history = _play_game(game, bots, argv[1:])
-      save_sgf(history, f"game_{game_num+1}.sgf")  # Save each game as SGF
-      histories[" ".join(history)] += 1
-      for i, v in enumerate(returns):
-        overall_returns[i] += v
-        if v > 0:
-          overall_wins[i] += 1
-  except (KeyboardInterrupt, EOFError):
-    game_num -= 1
-    print("Caught a KeyboardInterrupt, stopping early.")
-  print("Number of games played:", game_num + 1)
-  print("Number of distinct games played:", len(histories))
-  print("Players:", FLAGS.player1, FLAGS.player2)
-  print("Overall wins", overall_wins)
-  print("Overall returns", overall_returns)
+    parameters = {'board_size': 19, 'komi': 6.5}
+    game = pyspiel.load_game(FLAGS.game, parameters)
+    if game.num_players() > 2:
+        sys.exit("This game requires more players than the example can handle.")
+    bots = [
+        _init_bot(FLAGS.player1, game, 0),
+        _init_bot(FLAGS.player2, game, 1),
+    ]
+    histories = collections.defaultdict(int)
+    overall_returns = [0, 0]
+    overall_wins = [0, 0]
+    game_num = 0
+    player1_name = FLAGS.player1
+    player2_name = FLAGS.player2
+
+    try:
+        for game_num in range(FLAGS.num_games):
+            returns, history = _play_game(game, bots, argv[1:])
+            save_sgf(
+                history,
+                f"game_{game_num + 1}.sgf",
+                board_size=parameters['board_size'],
+                player1_name=player1_name,
+                player2_name=player2_name
+            )  # Save each game as SGF with specific player names
+            histories[" ".join(history)] += 1
+            for i, v in enumerate(returns):
+                overall_returns[i] += v
+                if v > 0:
+                    overall_wins[i] += 1
+    except (KeyboardInterrupt, EOFError):
+        game_num -= 1
+        print("Caught a KeyboardInterrupt, stopping early.")
+    print("Number of games played:", game_num + 1)
+    print("Number of distinct games played:", len(histories))
+    print("Players:", player1_name, player2_name)
+    print("Overall wins", overall_wins)
+    print("Overall returns", overall_returns)
 
 
 if __name__ == "__main__":
