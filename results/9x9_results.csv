@@ -1,4 +1,4 @@
-Player 1 Name,Player 2 Name,Player 1 Score,Player 2 Score,Winner,Score Difference,Number of Moves
+Player 1 Name (Black),Player 2 Name (White),Player 1 Score,Player 2 Score,Winner,Score Difference,Number of Moves
 ga,mcts,31,52.5,White,21.5,110
 ga,mcts,39,46.5,White,7.5,99
 ga,mcts,34,50.5,White,16.5,100
